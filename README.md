@@ -1,79 +1,151 @@
-# API Delivery
+# Rocketlog — API de gerenciamento de entregas
 
-API REST para gerenciamento de entregas, usuários e histórico de movimentações de uma encomenda.
+API REST desenvolvida com **Node.js, TypeScript e Express** para gerenciar usuários, entregas e o histórico de movimentações de encomendas.
 
-O projeto utiliza autenticação JWT, autorização baseada em perfil e registra logs sempre que o status de uma entrega é alterado.
-
-## Funcionalidades
-
-- Cadastro de usuários
-- Autenticação com JWT
-- Senhas protegidas com bcrypt
-- Perfis de usuário `customer` e `sale`
-- Cadastro e listagem de entregas
-- Atualização do status da entrega
-- Status disponíveis: `processing`, `shipped` e `delivered`
-- Registro de logs das alterações de status
-- Validação de dados com Zod
-- Persistência em PostgreSQL com Prisma ORM
-- Banco PostgreSQL configurável com Docker Compose
+O projeto implementa **autenticação JWT**, autorização por perfil de usuário, validação de dados e persistência com **Prisma ORM e PostgreSQL**.
 
 ## Tecnologias
 
-- Node.js
-- TypeScript
+- Node.js e TypeScript
 - Express
-- Prisma ORM
-- PostgreSQL
-- Docker
+- Prisma ORM e PostgreSQL
 - Zod
-- JSON Web Token (JWT)
-- bcrypt
+- JWT e bcrypt
+- Docker Compose
+- Jest, Supertest e ts-jest (estrutura de testes)
+- tsx e tsup
 
-## Modelo de dados
+## Funcionalidades
 
-A API trabalha principalmente com três entidades:
+- Cadastro e listagem de usuários
+- Login com geração de token JWT
+- Proteção de senhas com bcrypt
+- Perfis `customer` (cliente) e `sale` (responsável pelas entregas)
+- Atualização do perfil de usuário para `sale`, mediante autorização
+- Exclusão de usuários
+- Cadastro e listagem de entregas
+- Alteração do status das entregas: `processing`, `shipped` e `delivered`
+- Registro automático de histórico ao alterar o status
+- Inclusão de movimentações no histórico de entregas enviadas
+- Consulta de entrega com dados do usuário e histórico
+- Restrição de acesso: clientes consultam apenas suas próprias entregas
+- Validação de requisições com Zod e tratamento centralizado de erros
 
-- **User** — usuário da aplicação
-- **Delivery** — entrega vinculada a um usuário
-- **DeliveryLog** — histórico de alterações da entrega
+## Perfis e permissões
 
-## Principais rotas
+| Ação | customer | sale |
+| --- | --- | --- |
+| Consultar histórico da própria entrega | Sim | Sim |
+| Consultar histórico de qualquer entrega | Não | Sim |
+| Cadastrar, listar e atualizar entregas | Não | Sim |
+| Adicionar movimentações ao histórico | Não | Sim |
+| Atualizar perfil de usuário | Não | Sim |
 
-```text
-/users
-/sessions
-/deliveries
-/delivery-logs
-```
+> Observação: as rotas de cadastro, listagem e exclusão de usuários estão definidas sem middleware de autenticação no código atual. A tabela acima descreve as regras das rotas de entregas e das operações protegidas.
 
-## Como executar
+## Endpoints
 
-Instale as dependências:
+### Usuários
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| POST | `/users` | Cadastrar usuário |
+| GET | `/users` | Listar usuários |
+| PATCH | `/users/:id` | Atualizar perfil (requer `sale`) |
+| DELETE | `/users/:id` | Excluir usuário |
+
+### Autenticação
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| POST | `/sessions` | Autenticar usuário |
+
+### Entregas
+
+As rotas abaixo exigem autenticação e perfil `sale`.
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| POST | `/deliveries` | Criar entrega |
+| GET | `/deliveries` | Listar entregas |
+| PATCH | `/deliveries/:id/status` | Alterar status e registrar log |
+
+### Histórico
+
+| Método | Rota | Descrição | Acesso |
+| --- | --- | --- | --- |
+| POST | `/delivery-logs` | Adicionar movimentação | `sale` |
+| GET | `/delivery-logs/:delivery_id/show` | Consultar entrega e histórico | `customer` ou `sale` |
+
+O cliente só pode consultar o histórico de entregas vinculadas à sua conta.
+
+## Modelagem do banco
+
+O banco possui três entidades relacionadas:
+
+- **User:** dados de identificação, credenciais e perfil do usuário
+- **Delivery:** descrição, status e usuário responsável pela entrega
+- **DeliveryLog:** movimentações e alterações relacionadas à entrega
+
+Cada usuário pode ter várias entregas, e cada entrega pode ter vários registros de histórico.
+
+## Como executar localmente
+
+**Pré-requisitos:** Node.js (o projeto declara Node 24), npm e PostgreSQL. O banco também pode ser executado com Docker Compose.
+
+1. Clone o repositório e instale as dependências:
 
 ```bash
+git clone https://github.com/philipipastor/Api-delivery.git
+cd Api-delivery
 npm install
 ```
 
-Configure a variável `DATABASE_URL` no arquivo `.env`.
+2. Crie um arquivo `.env` na raiz:
 
-Caso utilize o Docker Compose do projeto, inicie o banco PostgreSQL:
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/rocketlog?schema=public"
+JWT_SECRET="substitua-por-uma-chave-secreta-segura"
+PORT=3333
+```
+
+Os valores de conexão acima são um exemplo para desenvolvimento local. Ajuste-os de acordo com seu banco de dados e não publique segredos reais.
+
+3. Se optar pelo PostgreSQL via Docker, inicie o serviço:
 
 ```bash
 docker compose up -d
 ```
 
-Execute as migrations do Prisma e inicie a aplicação:
+4. Gere o Prisma Client, aplique as migrations e inicie a API:
 
 ```bash
+npx prisma generate
 npx prisma migrate dev
 npm run dev
 ```
 
-## Aprendizados
+A API utilizará a porta configurada em `PORT` (padrão: `3333`).
 
-O projeto explora construção de APIs REST com autenticação e autorização, modelagem de relacionamentos com Prisma, validação de requisições, regras de negócio e utilização de PostgreSQL em ambiente Docker.
+## Scripts disponíveis
 
-## Autor
+| Comando | Finalidade |
+| --- | --- |
+| `npm run dev` | Executa a API em modo de desenvolvimento |
+| `npm run build` | Compila o projeto com tsup |
+| `npm start` | Executa a versão compilada |
+| `npm run test:dev` | Executa Jest em modo watch (script configurado para Windows) |
 
-Desenvolvido por **Philipi Pastor**.
+## Aprendizados aplicados
+
+- Estruturação de uma API REST com Express e TypeScript
+- Autenticação JWT e autorização baseada em perfis
+- Validação de entrada com Zod
+- Modelagem de relacionamentos com Prisma ORM
+- Persistência de dados em PostgreSQL
+- Registro e consulta de histórico de movimentações
+- Configuração de ambiente com Docker e variáveis de ambiente
+
+---
+
+**Desenvolvido por Philipi Pastor.**
