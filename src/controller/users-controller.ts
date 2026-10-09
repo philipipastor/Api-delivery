@@ -45,6 +45,35 @@ class UsersController {
         return response.json(users)
     }
 
+    async update(request: Request, response: Response) {
+        const bodySchema = z.object({
+            role: z.enum(["customer", "sale"])
+        });
+
+        const paramsSchema = z.object({
+            id: z.string().uuid(),
+        })
+
+        const { role } = bodySchema.parse(request.body)
+        const { id } = paramsSchema.parse(request.params)
+
+        const user = await prisma.user.findUnique({
+            where: { id },
+        });
+
+        if (!user) {
+            throw new AppError("Usuário não encontrado", 404);
+        }
+
+        if (user.role !== "customer") {
+            throw new AppError("O usuário já possui o perfil sale", 409);
+        }
+
+        await prisma.user.update({ data: { role }, where: { id } })
+
+        response.json({ message: "ok" })
+    }
+
     async remove(request: Request, response: Response) {
         const { id } = request.params
 
